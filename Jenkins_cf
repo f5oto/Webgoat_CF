@@ -31,28 +31,13 @@ pipeline {
             steps {
                 script{
                     try {
-                        def policyEvaluation = nexusPolicyEvaluation(
-                            failBuildOnNetworkError: false,
-                            iqInstanceId: 'iqserver',
-                            iqApplication: selectedApplication('${IQ_APPNAME}'),
-                            iqScanPatterns: [[scanPattern: '**/*.war']],
-                            iqStage: '${IQ_STAGE}',
-                            jobCredentialsId: '${JENKINS_CREDS_ID}',
+                        def policyEvaluation = nexusPolicyEvaluation failBuildOnNetworkError: true, iqInstanceId: 'iqserver', iqApplication: selectedApplication('${IQ_APPNAME}'), iqScanPatterns: [[scanPattern: '**/*.war']], iqStage: '${IQ_STAGE}', jobCredentialsId: '${JENKINS_CREDS_ID}',
                         callflow: [
                             enable: true,
                             failOnError: false,
                             timeout: '10 minutes',
                             logLevel: 'INFO',
                             algorithm: 'RTA_PLUS',  // Specify the algorithm as RTA_PLUS
-                            java: [
-                                tool: 'JDK_1_17_0',
-                                options: [
-                                    '-Xmx4G'
-                                        ],
-                                properties: [
-                                    foo: 'bar'
-                                        ]
-                                   ],
                             entrypointStrategy: [
                                 $class: 'NamedStrategy',
                                 name: 'JAVA_MAIN',
