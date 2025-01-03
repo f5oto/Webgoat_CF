@@ -13,7 +13,6 @@ pipeline {
     }
     tools {
        maven 'M3'
-       jdk 'JDK_1_17_0' 
     }
     stages {
         stage('Build') {
