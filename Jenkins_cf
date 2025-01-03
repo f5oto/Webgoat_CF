@@ -31,7 +31,8 @@ pipeline {
             steps {
                 script{
                     try {
-                        def policyEvaluation = nexusPolicyEvaluation failBuildOnNetworkError: false,
+                        def policyEvaluation = nexusPolicyEvaluation(
+                            failBuildOnNetworkError: false,
                             iqInstanceId: 'iqserver',
                             iqApplication: selectedApplication('${IQ_APPNAME}'),
                             iqScanPatterns: [[scanPattern: '**/*.war']],
@@ -60,6 +61,7 @@ pipeline {
                                 ]
                             ]
                         ]
+                        )
                         echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
                         IQ_SCAN_URL = "${policyEvaluation.applicationCompositionReportUrl}"
                     } 
