@@ -46,7 +46,6 @@ pipeline {
                                 ]
                             ]
                         ]
-                        )
                         echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
                         IQ_SCAN_URL = "${policyEvaluation.applicationCompositionReportUrl}"
                     } 
