@@ -4,6 +4,7 @@ pipeline {
     environment {
         ARTEFACT_NAME = "${WORKSPACE}/target/WebGoat-${BUILD_VERSION}.war"
         BUILD_VERSION = "1"
+        PROJECT_VERSION = "4.0.0"
         DEV_REPO = 'maven-development'
         TAG_FILE = "${WORKSPACE}/tag.json"
         JENKINS_CREDS_ID = "iqserver"
