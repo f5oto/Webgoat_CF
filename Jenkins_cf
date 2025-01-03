@@ -1,0 +1,125 @@
+pipeline {
+    agent any
+   
+    environment {
+        ARTEFACT_NAME = "${WORKSPACE}/target/WebGoat-${BUILD_VERSION}.war"
+        DEV_REPO = 'maven-development'
+        TAG_FILE = "${WORKSPACE}/tag.json"
+        JENKINS_CREDS_ID = "iqserver"
+        IQ_APPNAME = ".WebGoat_jenkins_cf"
+        IQ_SCAN_URL = ""
+        IQ_STAGE = "build"
+
+    }
+    tools {
+       maven 'M3'
+       jdk 'JDK_1_17_0' 
+    }
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn -B -Dproject.version=$BUILD_VERSION -Dmaven.test.failure.ignore clean package'
+            }
+            post {
+                success {
+                    echo 'Now archiving...'
+                    archiveArtifacts artifacts: "**/target/*.war"
+                }
+            }
+        }
+        stage('Nexus IQ Scan'){
+            steps {
+                script{
+                    try {
+                        def policyEvaluation = nexusPolicyEvaluation,
+                            failBuildOnNetworkError: false,
+                            iqInstanceId: 'iqserver',
+                            iqApplication: selectedApplication('${IQ_APPNAME}'),
+                            iqScanPatterns: [[scanPattern: '**/*.war']],
+                            iqStage: '${IQ_STAGE}',
+                            jobCredentialsId: '${JENKINS_CREDS_ID}',,
+                        callflow: [
+                            enable: true,
+                            failOnError: false,
+                            timeout: '10 minutes',
+                            logLevel: 'INFO',
+                            algorithm: 'RTA_PLUS',  // Specify the algorithm as RTA_PLUS
+                            java: [
+                                tool: 'JDK_1_17_0',
+                                options: [
+                                    '-Xmx4G'
+                                        ],
+                                properties: [
+                                    foo: 'bar'
+                                        ]
+                                   ],
+                            entrypointStrategy: [
+                                $class: 'NamedStrategy',
+                                name: 'JAVA_MAIN',
+                                namespaces: [
+                                    ''
+                                ]
+                            ]
+                        ]
+                        echo "Nexus IQ scan succeeded: ${policyEvaluation.applicationCompositionReportUrl}"
+                        IQ_SCAN_URL = "${policyEvaluation.applicationCompositionReportUrl}"
+                    } 
+                    catch (error) {
+                        def policyEvaluation = error.policyEvaluation
+                        echo "Nexus IQ scan vulnerabilities detected', ${policyEvaluation.applicationCompositionReportUrl}"
+                        throw error
+                    }
+                }
+            }
+        }
+        stage('Create SBOM') {
+            steps {
+                sh 'rm /Users/stuartbishop/.Jenkins/workspace/WebGoat-Build-Develop-Github/webgoat-bom.xml'
+                sh 'curl -u cmYZijbW:Y8Q9RTeZUPAAUOXV05JJHEPmRz5hhD3fXv8aIrHPl9kr -X GET http://localhost:8070/api/v2/cycloneDx/1.5/5b7788b5d272456487c05632a1506786/stages/build -O -J'
+            }
+          
+        }
+        stage('Import into SBOM Manager') {
+            steps {
+                sh 'curl -i -u cmYZijbW:Y8Q9RTeZUPAAUOXV05JJHEPmRz5hhD3fXv8aIrHPl9kr -F file="@/Users/stuartbishop/.Jenkins/workspace/WebGoat-Build-Develop-Github/webgoat-bom.xml" -F applicationId=5b7788b5d272456487c05632a1506786 -F applicationVersion=$BUILD_VERSION -X POST "http://localhost:8070/api/v2/sbom/import?enableBinaryImport=false"'
+            }
+          
+        }
+        stage('Create tag'){
+            steps {
+                script {
+    
+                    // Git data (Git plugin)
+                    echo "${GIT_COMMIT}"
+                    echo "${GIT_URL}"
+                    echo "${GIT_BRANCH}"
+                    echo "${WORKSPACE}"
+                    
+                    // construct the meta data (Pipeline Utility Steps plugin)
+                    def tagdata = readJSON text: '{}' 
+                    tagdata.buildUser = "${USER}" as String
+                    tagdata.buildNumber = "${BUILD_NUMBER}" as String
+                    tagdata.buildId = "${BUILD_ID}" as String
+                    tagdata.buildJob = "${JOB_NAME}" as String
+                    tagdata.buildTag = "${BUILD_TAG}" as String
+                    tagdata.appVersion = "${BUILD_VERSION}" as String
+                    tagdata.buildUrl = "${BUILD_URL}" as String
+                    tagdata.iqScanUrl = "${IQ_SCAN_URL}" as String
+                    //tagData.promote = "no" as String
+                    writeJSON(file: "${TAG_FILE}", json: tagdata, pretty: 4)
+                    sh 'cat ${TAG_FILE}'
+                    createTag nexusInstanceId: 'nexus', tagAttributesPath: "${TAG_FILE}", tagName: "${BUILD_TAG}"
+                    // write the tag name to the build page (Rich Text Publisher plugin)
+                    rtp abortedAsStable: false, failedAsStable: false, parserName: 'Confluence', stableText: "Nexus Repository Tag: ${BUILD_TAG}", unstableAsStable: true 
+                }
+            }
+        }
+        stage('Upload to Nexus Repository'){
+            steps {
+                script {
+                    nexusPublisher nexusInstanceId: 'nexus', nexusRepositoryId: "${DEV_REPO}", packages: [[$class: 'MavenPackage', mavenAssetList: [[classifier: '', extension: 'war', filePath: "${ARTEFACT_NAME}"]], mavenCoordinate: [artifactId: 'WebGoat', groupId: 'WebGoat', packaging: 'war', version: "${BUILD_VERSION}"]]], tagName: "${BUILD_TAG}"
+                }
+            }
+        }
+    }
+}
